@@ -8,10 +8,16 @@ const char ADMIN_USERNAME[6] = "Admin";
 const char ADMIN_PASSWORD[32] = "12345678";
 char username[32], password[32], role[8];
 bool isLogged = false;
+int jumlahKursi = 180;
 
 enum Status {
   AVAILABLE,
   BOOKED,
+};
+
+enum TiketStatus {
+  CANCELLED = 0,
+  COMPLETED = 1,
 };
 
 struct User{
@@ -28,8 +34,9 @@ struct Tiket{
   char asal[16];
   char kursi[4];
   char jam[6];
-  char kelas[12];
+ // char kelas[12];
   char createdBy[32];
+  int status;
   char tanggal_keberangkatan[16];
   char tanggal_pemesanan[16];
 };
@@ -113,12 +120,15 @@ void printJudul(char *string){
 
 void printTiket(int i, struct Tiket *tiket){
   printf("---------Tiket %d------------ \n", i+1);
+  printf("Id Tiket\t: %d\n", tiket[i].id_tiket);
   printf("Nama\t\t: %s\n", tiket[i].pemilik);
   printf("Kursi\t\t: %s\n", tiket[i].kursi);
-  printf("Kelas\t\t: %s\n", tiket[i].kelas);
+  //printf("Kelas\t\t: %s\n", tiket[i].kelas);
   printf("Jam\t\t: %s\n", tiket[i].jam);
   printf("Asal\t\t: %s\n", tiket[i].asal);
   printf("Tujuan\t\t: %s\n", tiket[i].tujuan);
+  printf("Status\t\t: %s\n", tiket[i].status == COMPLETED ? "COMPLETED" : "CANCELLED");
+  printf("Dipesan Oleh\t: %s\n", tiket[i].createdBy);
   printf("Tanggal Pemesanan\t: %s\n", tiket[i].tanggal_pemesanan);
   printf("Tanggal Keberangkatan\t: %s\n", tiket[i].tanggal_keberangkatan);
   printf("\n");
@@ -299,31 +309,35 @@ void buyTicket(struct Kursi kursi[], struct Tiket tiket[], int jumlahTiket){
     printf("--------\n");
     printKursi(kursi, jumlahTiket);
     printf("--------\n");
-    printf("Pilih kursi(Harus Kapital)\t: ");
-    scanf(" %[^\n]", tiket[idx].kursi);
     
-    int getIndexKursi = searchKursi(kursi, jumlahTiket, tiket[idx].kursi);
-    if(kursi[getIndexKursi].status == BOOKED){
-      printf("Maaf, kursi sudah dibooking \n");
-      idx--;
-      continue;
-    }
-  
-    printf("Kelas\t\t: ");
-    scanf(" %[^\n]", kelas);
+    bool isSelectedSeatHasOwner = false;
+    
+    //insert kursi
+    do{
+      printf("Pilih kursi(Harus Kapital)\t: ");
+      scanf(" %[^\n]", tiket[idx].kursi);
+      int getIndexKursi = searchKursi(kursi, jumlahTiket, tiket[idx].kursi);
+      if(kursi[getIndexKursi].status == BOOKED){
+        printf("Maaf, kursi sudah dibooking \n\n");
+        isSelectedSeatHasOwner = true;
+      }
+      else{
+        isSelectedSeatHasOwner = false;
+      }
+      if(getIndexKursi != -1){
+        kursi[getIndexKursi].status = BOOKED;
+      }
+    }while(isSelectedSeatHasOwner);
     getDateAndTime(tanggal_pemesanan, jam);
-    
-    if(getIndexKursi != -1){
-      kursi[getIndexKursi].status = BOOKED;
-    }
     
     //save to data ticket
     tiket[idx].id_tiket = idx+1;
-    strcpy(tiket[idx].kelas, kelas);
+    //strcpy(tiket[idx].kelas, kelas);
     strcpy(tiket[idx].tanggal_pemesanan, tanggal_pemesanan);
     strcpy(tiket[idx].jam, jam);
     strcpy(tiket[idx].asal, asal);
     strcpy(tiket[idx].tujuan, tujuan);
+    tiket[idx].status = COMPLETED;
     strcpy(tiket[idx].tanggal_keberangkatan, tanggal_keberangkatan);
     strcpy(tiket[idx].createdBy, username);
     
@@ -339,14 +353,17 @@ void printMyTicket(struct Tiket *tiket){
     return;
   }
   
+  int hasFound = 0;
+  
   for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
-    if(strcmp(tiket[i].pemilik, username) == 0){
+    if(strcmp(tiket[i].createdBy, username) == 0){
       printTiket(i, &tiket[i]);
+      hasFound++;
     }
-    else{
-      printf("Tiket tidak ditemukan\n");
-      break;
-    }
+  }
+  
+  if(!hasFound){
+    printf("Tiket tidak ditemukan\n");
   }
 }
 
@@ -516,14 +533,97 @@ void sortTicket(struct Tiket *tiket){
   }
 }
 
+bool checkAvailableSeat(struct Kursi *kursi, char *selectedSeat){
+  for(int i = 0; i < jumlahKursi; i++){
+    if(strcmp(kursi[i].posisi, selectedSeat) == 0){
+      //printf("Kursi sudah terisi\n");
+      return true;
+    }
+  }
+  
+  //printf("Kursi tersedia\n");
+  return false;
+}
+
+void editTiket(struct Tiket *tiket, struct Kursi *kursi){
+  if(GLOBAL_TICKET_INDEX == 0){
+    printf("Tidak ada tiket yang tersedia\n");
+    return;
+  }
+  
+  int choice;
+  int idCari;
+  
+  printf("1. Edit Nama Penumpang\n");
+  printf("2. Edit Nomor Kursi\n");
+  printf("3. Edit Tanggal Keberangkatan\n");
+  
+  printf("Pilih yang ingin anda edit: ");
+  scanf("%d", &choice);
+  
+  if(choice < 1 || choice > 3){
+    printf("Pilihan tidak valid\n");
+    return;
+  }
+  
+  for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
+    if(strcmp(tiket[i].createdBy, username) == 0){
+      printTiket(i, tiket);
+    }
+  }
+  
+  printf("Pilih Id Tiket yang ingin diganti: ");
+  scanf("%d", &idCari);
+  
+  switch(choice){
+    case 1:
+      printf("Masukkan nama baru: ");
+      scanf(" %s", tiket[idCari].pemilik);
+      
+      printf("Nama berhasil diubah\n");
+      break;
+    case 2:
+      char selectedSeat[10];
+      char *answer = "y";
+      bool isAvailableSeat = false;
+      do{
+        printf("Masukkan nomor kursi baru: ");
+        scanf(" %s", selectedSeat);
+        
+        if(checkAvailableSeat(kursi, selectedSeat)){
+          printf("Kursi sudah terisi\n");
+        } else {
+          printf("Apakah anda yakin ingin mengubah posisi kursi? (y/n)");
+          scanf(" %s", answer);
+          if(strcmp(answer, "y") == 0){
+            strcpy(tiket[idCari].kursi, selectedSeat);
+            printf("Nomor kursi berhasil diubah\n");
+            isAvailableSeat = true;
+          }
+        }
+      }
+      while(!isAvailableSeat && strcmp(answer, "n") == 0);
+      
+      break;
+    case 3:
+      printf("Masukkan tanggal keberangkatan baru: ");
+      scanf("%s", tiket[idCari].tanggal_keberangkatan);
+      break;
+    default:
+      printf("Pilihan tidak valid\n");
+      break;
+  }
+}
+
 void menu(struct Tiket *tiket, struct User *user, int totalUser, struct Kursi *kursi, int jumlahKursi){
   int choice;
   printJudul("Selamat datang di tiket pemesanan pesawat");
   printf("1. Beli Tiket\n");
-  printf("2. Tampilkan Semua Tiket Saya\n");
+  printf("2. Tampilkan Semua Tiket Yang Dipesan Oleh Saya\n");
   printf("3. Cari Tiket\n");
   printf("4. Urutkan Tiket\n");
-  printf("5. Logout\n");
+  printf("5. Edit Tiket (Jika ada kesalahan data!)\n");
+  printf("6. Logout\n");
   
   printf("Pilihan Kamu: ");
   scanf("%d", &choice);
@@ -544,6 +644,9 @@ void menu(struct Tiket *tiket, struct User *user, int totalUser, struct Kursi *k
       sortTicket(tiket);
       break;
     case 5:
+      editTiket(tiket, kursi);
+      break;
+    case 6:
       logout();
       break;
     default:
@@ -557,7 +660,7 @@ bool isLogout(){
 }
 
 int main(){
-  int jumlahKursi = 180;
+  
   
   struct User user[128];
   struct Kursi kursi[jumlahKursi];

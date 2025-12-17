@@ -6,12 +6,7 @@
 #include <stdbool.h>
 
 #define MAX_FLIGHTS 100
-
-const char ADMIN_USERNAME[6] = "Admin";
-const char ADMIN_PASSWORD[32] = "12345678";
-char username[32], password[32], role[8];
-bool isLogged = false;
-int jumlahKursi = 180;
+#define MAX_LOGS 256
 
 enum Status {
   AVAILABLE,
@@ -55,6 +50,30 @@ struct Flight{
   struct Kursi kursi[180];
 };
 
+struct Log{
+  char user[32];
+  char message[128];
+  char datetime[32];
+};
+
+struct Log logHistory[MAX_LOGS];
+
+const char ADMIN_USERNAME[6] = "Admin";
+const char ADMIN_PASSWORD[32] = "12345678";
+char username[32], password[32], role[8];
+bool isLogged = false;
+int jumlahKursi = 180;
+
+//GLOBAL VARIABLES
+int GLOBAL_LOG_COUNT = 0;
+int GLOBAL_TICKET_INDEX = 0;
+int GLOBAL_FLIGHT_COUNT = 0;
+
+struct Flight flight[MAX_FLIGHTS];
+
+
+//------------------------------------ UTILS FUNCTIONS -----------------------------------------
+
 void getDateAndTime(char *tanggal, char *jam, char *dateWithTime){
   time_t now = time(NULL);
   struct tm *local = localtime(&now);
@@ -64,15 +83,14 @@ void getDateAndTime(char *tanggal, char *jam, char *dateWithTime){
   strftime(dateWithTime, 24, "%d-%m-%Y %H:%M", local);
 }
 
-void createFile(){
+void createFile(char *fileName){
   FILE *file;
   printf("Load File... \n");
-  file = fopen("user.txt", "w");
+  file = fopen(fileName, "w");
   if(file == NULL){
-    printf("File not found");
-    exit(1);
+    printf("File not found, system will create a new file");
+    // exit(1);
   }
-  fprintf(file, "Lorem Ipsum dolor");
   fclose(file);
   printf("File is loaded \n");
 }
@@ -124,6 +142,134 @@ void insertDataToFile(char *username, char *password){
   fclose(file);
 }
 
+void insertLog(char *username, char *action){
+  FILE *file;
+  file = fopen("log.txt", "a");
+  if(file == NULL){
+    printf("File not found");
+    createFile("log.txt");
+  }
+  fprintf(file, "%s\n%s\n", username, action);
+  fclose(file);
+}
+
+void getLogFromFile(struct Log *log){
+  FILE *file = fopen("log.txt", "r");
+    if(!file) return;
+  
+    char line[256];
+    while(fgets(line, sizeof(line), file)){
+      if(GLOBAL_LOG_COUNT >= MAX_LOGS) break;
+  
+      line[strcspn(line, "\n")] = 0;
+  
+      char *user = strtok(line, "|");
+      char *time = strtok(NULL, "|");
+      char *msg  = strtok(NULL, "|");
+  
+      if(user && time && msg){
+        strcpy(logHistory[GLOBAL_LOG_COUNT].user, user);
+        strcpy(logHistory[GLOBAL_LOG_COUNT].datetime, time);
+        strcpy(logHistory[GLOBAL_LOG_COUNT].message, msg);
+        GLOBAL_LOG_COUNT++;
+      }
+    }
+    fclose(file);
+}
+
+void getDateTimeLog(char *buffer){
+  time_t now = time(NULL);
+  struct tm *local = localtime(&now);
+  strftime(buffer, 32, "%d-%m-%Y %H:%M", local);
+}
+
+void insertLogToStruct(char *message){
+  if(GLOBAL_LOG_COUNT >= MAX_LOGS){
+      printf("Log sudah penuh!\n");
+      return;
+    }
+  
+    char datetime[32];
+    getDateTimeLog(datetime);
+  
+    strcpy(logHistory[GLOBAL_LOG_COUNT].user, username);
+    strcpy(logHistory[GLOBAL_LOG_COUNT].datetime, datetime);
+    strcpy(logHistory[GLOBAL_LOG_COUNT].message, message);
+  
+    FILE *file = fopen("log.txt", "a");
+    if(file){
+      fprintf(file, "%s|%s|%s\n", username, datetime, message);
+      fclose(file);
+    }
+  
+    GLOBAL_LOG_COUNT++;
+}
+
+void saveFlightToFile(){
+  FILE *file = fopen("flight.txt", "w");
+  if(!file){
+    printf("Gagal menyimpan flight\n");
+    return;
+  }
+
+  for(int i = 0; i < GLOBAL_FLIGHT_COUNT; i++){
+    fprintf(file, "%d|%s|%s|%s|%s|%s|%d\n",
+      flight[i].id,
+      flight[i].kode,
+      flight[i].asal,
+      flight[i].tujuan,
+      flight[i].tanggal,
+      flight[i].jam,
+      flight[i].harga
+    );
+  }
+
+  fclose(file);
+}
+
+void loadFlightFromFile(){
+  FILE *file = fopen("flight.txt", "r");
+  if(!file) return;
+
+  char line[256];
+
+  while(fgets(line, sizeof(line), file)){
+    if(GLOBAL_FLIGHT_COUNT >= MAX_FLIGHTS) break;
+
+    line[strcspn(line, "\n")] = 0;
+
+    char *token = strtok(line, "|");
+    flight[GLOBAL_FLIGHT_COUNT].id = atoi(token);
+
+    token = strtok(NULL, "|");
+    strcpy(flight[GLOBAL_FLIGHT_COUNT].kode, token);
+
+    token = strtok(NULL, "|");
+    strcpy(flight[GLOBAL_FLIGHT_COUNT].asal, token);
+
+    token = strtok(NULL, "|");
+    strcpy(flight[GLOBAL_FLIGHT_COUNT].tujuan, token);
+
+    token = strtok(NULL, "|");
+    strcpy(flight[GLOBAL_FLIGHT_COUNT].tanggal, token);
+
+    token = strtok(NULL, "|");
+    strcpy(flight[GLOBAL_FLIGHT_COUNT].jam, token);
+
+    token = strtok(NULL, "|");
+    flight[GLOBAL_FLIGHT_COUNT].harga = atoi(token);
+
+    GLOBAL_FLIGHT_COUNT++;
+  }
+
+  fclose(file);
+}
+
+
+// ------------------------------------- END UTILS FUNCTIONS -----------------------------
+
+//------------------------------------ DECORATION FUNCTIONS -----------------------------------------
+
 void printJudul(char *string){
   printf("---------------------- %s --------------------- \n", string);
 }
@@ -142,6 +288,7 @@ void centerTitle(const char *title){
   line();
 }
 
+// ------------------------------------- END DECORATION FILE -----------------------------
 
 void handleRegister(struct User user[]){
   char username[32], password[32];
@@ -175,14 +322,11 @@ void login(struct User user[], int userCount){
   printf("1. Login\n");
   printf("2. Registrasi\n");
   printf("Pilihan anda (Hanya Angka): ");
-  
   scanf("%d", &choice);
 
   if(choice != 1){
     handleRegister(user);
   }
-  
-  
   
   bool isUserFound = false;
   bool isWrongPassword = false;
@@ -252,6 +396,7 @@ void initKursi(int jumlahKursi, struct Kursi kursi[]){
     baris++;
   }
 }
+
 // ---------------------------ADMIN MENU AND FUNCTION---------------------------------
 
 
@@ -266,7 +411,7 @@ void initKursi(int jumlahKursi, struct Kursi kursi[]){
 //   struct Kursi kursi[180];
 // };
 
-int GLOBAL_FLIGHT_COUNT = 0;
+
 
 void checkIsNullTotalFlight(int TOTAL_FLIGHT){
   if(TOTAL_FLIGHT == 0){
@@ -291,6 +436,8 @@ void printAllFlight(struct Flight *flight){
   for(int i = 0; i < GLOBAL_FLIGHT_COUNT; i++){
     printFlight(&flight[i]);
   }
+  
+  insertLogToStruct("Menampilkan semua flight");
 }
 
 void addFlight(struct Flight *flight, struct Kursi *kursi){
@@ -319,11 +466,11 @@ void addFlight(struct Flight *flight, struct Kursi *kursi){
     
     
     flight[idx].id = idx + 1;
-    
-    
     initKursi(jumlahKursi, flight[idx].kursi);
     
     printf("Flight berhasil ditambahkan!\n");
+    
+    insertLogToStruct("Menambahkan flight !");
     
     printf("Apakah ingin menambahkan flight lagi? (y/n): ");
     char choice;
@@ -385,7 +532,10 @@ void editFlight(struct Flight *flight){
         break;
     }
      
+    insertLogToStruct("Mengedit flight !");
+    
     printf("Apakah ingin mengedit flight lagi? (y/n): ");
+    
     char choiceToStop;
     scanf(" %c", &choiceToStop);
     if(choiceToStop == 'n'){
@@ -425,17 +575,36 @@ void deleteFlight(struct Flight *flight){
   
   (GLOBAL_FLIGHT_COUNT)--;
   
-  printf("Flight berhasil dihapus\n");
+  insertLogToStruct("Menghapus Log !");
   
+  printf("Flight berhasil dihapus\n"); 
 }
 
-void adminMenu(struct Flight *flight, struct Kursi *kursi){
+void printLogHistory(struct Log *logHistory){
+  printJudul("LOG HISTORY");
+ 
+   if(GLOBAL_LOG_COUNT == 0){
+     printf("Belum ada log\n");
+     return;
+   }
+ 
+   for(int i = 0; i < GLOBAL_LOG_COUNT; i++){
+     printf("[%s] %s - %s\n",
+       logHistory[i].datetime,
+       logHistory[i].user,
+       logHistory[i].message
+     );
+   }
+}
+
+void adminMenu(struct Flight *flight, struct Kursi *kursi, struct Log *log){
   printJudul("MENU ADMIN");
   printf("1. Tambah Flight \n");
   printf("2. Tampilkan Semua Flight \n");
   printf("3. Edit Flight \n");
   printf("4. Hapus Flight \n");
-  printf("5. Logout \n");
+  printf("5. Tampilkan Log History \n");
+  printf("6. Logout \n");
   
   int choice;
   printf("Pilih menu: ");
@@ -443,17 +612,23 @@ void adminMenu(struct Flight *flight, struct Kursi *kursi){
   switch(choice){
     case(1):
       addFlight(flight, kursi);
+      saveFlightToFile();
       break;
     case(2):
       printAllFlight(flight);
       break;
     case(3):
       editFlight(flight);
+      saveFlightToFile();
       break;
     case(4):
       deleteFlight(flight);
+      saveFlightToFile();
       break;
     case(5):
+      printLogHistory(log);
+      break;
+    case(6):
       logout();
       break;
     default:
@@ -532,8 +707,6 @@ int searchKursi(struct Kursi kursi[], int jumlahKursi, char *find){
   return -1;
 }
 
-int GLOBAL_TICKET_INDEX = 0;
-
 void buyTicket(struct Kursi kursi[], struct Tiket tiket[], int jumlahTiket, struct Flight *flight){
   int totalTiketDibeli;
   int selectedFlightID;
@@ -596,6 +769,8 @@ void buyTicket(struct Kursi kursi[], struct Tiket tiket[], int jumlahTiket, stru
     printf("\n \n");
   }
   
+  insertLogToStruct("Membeli Tiket");
+  
   printf("Tiket berhasil dibeli \n\n");
 }
 
@@ -620,6 +795,8 @@ void printMyTicket(struct Tiket *tiket, struct Flight *flight){
   if(!hasFound){
     printf("Tiket tidak ditemukan\n");
   }
+  
+  insertLogToStruct("Menampilkan Tiket");
 }
 
 // -------------------------- SEARCH TICKET BY NAME AND SEAT --------------------------
@@ -877,6 +1054,8 @@ void editTiket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *flight){
       printf("Pilihan tidak valid\n");
       break;
   }
+  
+  insertLogToStruct("Mengedit Tiket");
 }
 
 void cancelTicket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *flight){
@@ -917,6 +1096,8 @@ void cancelTicket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *fligh
   else{
     printf("ID Tiket tidak valid\n");
   }
+  
+  insertLogToStruct("Cancel Tiket");
 }
 
 void menu(struct Tiket *tiket, struct User *user, int totalUser, struct Kursi *kursi, int jumlahKursi, struct Flight *flight){
@@ -974,14 +1155,15 @@ int main(){
   struct User user[128];
   struct Kursi kursi[jumlahKursi];
   struct Tiket tiket[jumlahKursi];
-  struct Flight flight[MAX_FLIGHTS];
+  
+  loadFlightFromFile();
   
   int totalUser = openFile(user);
-  
+  getLogFromFile(logHistory);
   while(1){
     if(!isLogout()){
       if(strcmp(username, ADMIN_USERNAME) == 0){
-        adminMenu(flight, kursi);
+        adminMenu(flight, kursi, logHistory);
       }
       else{
         menu(tiket, user, totalUser, kursi, jumlahKursi, flight);

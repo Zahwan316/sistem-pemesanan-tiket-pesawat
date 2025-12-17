@@ -1,9 +1,15 @@
+// Login ke admin dengan username: Admin dan password: 12345678
+// Kemudian tambah flight terlebih dahulu
+// Lalu bisa logout untuk lanjut ke pemesanan di menu user
+
+
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
+#include <unistd.h> // ganti ke windows.h untuk windows
 
 #define MAX_FLIGHTS 100
 #define MAX_LOGS 256
@@ -27,26 +33,27 @@ struct User{
 struct Tiket{
   int id_tiket;
   int flight_id;
+  int status;
   char pemilik[50];
   char kursi[4];
   char createdBy[32];
-  int status;
   char tanggal_pemesanan[24];
 };
 
 struct Kursi{
+  int flight_id;
   char posisi[12];
   enum Status status;
 }; 
 
 struct Flight{
   int id;
+  int harga;
   char kode[16];
   char asal[16];
   char tujuan[16];
   char tanggal[16];
   char jam[6];
-  int harga;
   struct Kursi kursi[180];
 };
 
@@ -68,11 +75,33 @@ int jumlahKursi = 180;
 int GLOBAL_LOG_COUNT = 0;
 int GLOBAL_TICKET_INDEX = 0;
 int GLOBAL_FLIGHT_COUNT = 0;
+int GLOBAL_KURSI_COUNT = 0;
 
 struct Flight flight[MAX_FLIGHTS];
 
 
 //------------------------------------ UTILS FUNCTIONS -----------------------------------------
+
+void loadingPlaneMove(){
+  system("clear");
+
+  for(int i = 0; i < 60; i++){
+    system("clear");
+    printf("Memuat Sistem...\n\n");
+
+    for(int s = 0; s < i; s++) printf(" ");
+    printf("   ___|___\n");
+
+    for(int s = 0; s < i; s++) printf(" ");
+    printf("--o--(_)--o--\n");
+
+    for(int s = 0; s < i; s++) printf(" ");
+    printf("    /___\\\n");
+
+    printf("\n");
+    usleep(120000);
+  }
+}
 
 void getDateAndTime(char *tanggal, char *jam, char *dateWithTime){
   time_t now = time(NULL);
@@ -98,36 +127,37 @@ void createFile(char *fileName){
 int openFile(struct User *user){
   FILE *file;
   file = fopen("user.txt", "r");
+    char buffer[240];
+    int i = 0;
+    int usrIndex = 0;
   if(file == NULL){
-    printf("File not found");
-    exit(1);
+    printf("File not found \n");
+    createFile("user.txt");
+    return 0;
+  }
+  else{   
+    while(fgets(buffer, sizeof(buffer), file)){
+        buffer[strcspn(buffer, "\n")] = '\0';
+        if(i % 2 == 0){
+        strcpy(user[usrIndex].name, buffer);
+        }
+        else{
+        strcpy(user[usrIndex].password, buffer);
+        usrIndex++;
+        }
+        
+        i++;
+    }
   }
   
-  char buffer[240];
-  int i = 0;
-  int usrIndex = 0;
-
-  
-  while(fgets(buffer, sizeof(buffer), file)){
-    buffer[strcspn(buffer, "\n")] = '\0';
-    if(i % 2 == 0){
-      strcpy(user[usrIndex].name, buffer);
-    }
-    else{
-      strcpy(user[usrIndex].password, buffer);
-      usrIndex++;
-    }
-      
-    i++;
-  }
 
   // for(int j = 0; j < usrIndex; j++){
   //   printf("name: %s \npassword: %s \n", user[j].name, user[j].password);
   // }
   
+  fclose(file);
   printf("users = %d \n", usrIndex);
   
-  fclose(file);
   return usrIndex;
 }
 
@@ -311,6 +341,7 @@ void handleRegister(struct User user[]){
     strcpy(user[i].password, password);
   }
   insertDataToFile(username, password);
+  insertLogToStruct("Registrasi User");
   printf("Registrasi berhasil! \n\n");  
 }
 
@@ -354,6 +385,7 @@ void login(struct User user[], int userCount){
         if(strcmp(user[i].password, password) == 0){
           isLogged = true;
           isWrongPassword = false;
+          insertLogToStruct("Login ke aplikasi");
           printf("Login berhasil\n\n");
         }
         else{
@@ -372,9 +404,12 @@ void login(struct User user[], int userCount){
     }
   }
   while(!isLogged); 
+  
+  
 }
 
 void logout(){
+  insertLogToStruct("Log out dari aplikasi");
   isLogged = false;
   strcpy(role, "");
   strcpy(username, "");
@@ -643,29 +678,39 @@ void adminMenu(struct Flight *flight, struct Kursi *kursi, struct Log *log){
 // -------------------------------- USER MENU AND FUNCTION -----------------------------------------
 
 void printTiket(struct Tiket *tiket, struct Flight *flight){
-  line();
-  printf(" TIKET #%d\n", tiket->id_tiket);
-  line();
+    line();
+    printf(" TIKET ID        : %d\n", tiket->id_tiket);
+    subLine();
+    printf(" NAMA PENUMPANG  : %s\n", tiket->pemilik);
+    printf(" KURSI           : %s\n", tiket->kursi);
+    printf(" STATUS          : %s\n",
+      tiket->status == COMPLETED ? "COMPLETED" : "CANCELLED");
+    printf(" DIPESAN OLEH    : %s\n", tiket->createdBy);
+    printf(" TGL PEMESANAN   : %s\n", tiket->tanggal_pemesanan);
+    
+    subLine();
+    printf(" DETAIL PENERBANGAN\n");
+    subLine();
+    
+    int fIdx = tiket->flight_id - 1;
+    printf(" KODE FLIGHT     : %s\n", flight[fIdx].kode);
+    printf(" RUTE            : %s -> %s\n",
+           flight[fIdx].asal,
+           flight[fIdx].tujuan);
+    printf(" TANGGAL         : %s\n", flight[fIdx].tanggal);
+    printf(" JAM             : %s\n", flight[fIdx].jam);
+    
+    line();
+    printf("\n");
+}
 
-  printf(" Nama Penumpang : %s\n", tiket->pemilik);
-  printf(" Kursi          : %s\n", tiket->kursi);
-  printf(" Status         : %s\n",
-         tiket->status == COMPLETED ? "COMPLETED" : "CANCELLED");
-  printf(" Dipesan Oleh   : %s\n", tiket->createdBy);
-  printf(" Tgl Pemesanan  : %s\n", tiket->tanggal_pemesanan);
-
-  subLine();
-  printf(" DETAIL PENERBANGAN\n");
-  subLine();
-
-  int fIdx = tiket->flight_id - 1;
-  printf(" Kode Flight    : %s\n", flight[fIdx].kode);
-  printf(" Rute           : %s -> %s\n", flight[fIdx].asal, flight[fIdx].tujuan);
-  printf(" Tanggal        : %s\n", flight[fIdx].tanggal);
-  printf(" Jam            : %s\n", flight[fIdx].jam);
-
-  line();
-  printf("\n");
+int findTiketIndexById(struct Tiket *tiket, int id){
+  for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
+    if(tiket[i].id_tiket == id){
+      return i;
+    }
+  }
+  return -1;
 }
 
 
@@ -803,60 +848,55 @@ void printMyTicket(struct Tiket *tiket, struct Flight *flight){
 void searchTicketByName(struct Tiket *tiket, struct Flight *flight){
   char nama[50];
   printf("Masukkan nama yang ingin dicari: ");
-  scanf("%s", nama);
+  scanf(" %[^\n]", nama);
+  
+  int hasFound = 0;
   
   for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
     if(strcmp(tiket[i].pemilik, nama) == 0){
       printTiket(&tiket[i], flight);
-    }
-    else{
-      printf("Tiket dengan nama %s tidak ditemukan\n", nama);
+      hasFound++;
     }
   }
+  
+  if(!hasFound){
+    printf("Tiket dengan nama %s tidak ditemukan\n", nama);
+  }  
 }
 
 void searchTicketBySeat(struct Tiket *tiket, struct Flight *flight){
   char kursi[50];
   printf("Masukkan nomor kursi yang ingin dicari: ");
-  scanf("%s", kursi);
+  scanf(" %[^\n]", kursi);
   
+  int hasFound = 0;
   for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
     if(strcmp(tiket[i].kursi, kursi) == 0){
       printTiket(&tiket[i], flight);
-    }
-    else{
-      printf("Tiket dengan nomor kursi %s tidak ditemukan\n", kursi);
+      hasFound++;
     }
   }
-}
-
-// void searchTicketByDepartureDate(struct Tiket *tiket){
-//   char tanggal[50];
-//   printf("Masukkan tanggal keberangkatan yang ingin dicari: ");
-//   scanf("%s", tanggal);
   
-//   for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
-//     if(strcmp(tiket[i].tanggal_keberangkatan, tanggal) == 0){
-//       printTiket(&tiket[i]);
-//     }
-//     else{
-//       printf("Tiket dengan tanggal keberangkatan %s tidak ditemukan\n", tanggal);
-//     }
-//   }
-// }
+  if(!hasFound){
+    printf("Tiket dengan nomor kursi %s tidak ditemukan\n", kursi);
+  }
+}
 
 void searchTicketByPurchaseDate(struct Tiket *tiket, struct Flight *flight){
   char tanggal[50];
   printf("Masukkan tanggal pemesanan yang ingin dicari: ");
-  scanf("%s", tanggal);
+  scanf(" %[^\n]", tanggal);
   
+  int hasFound = 0;
   for(int i = 0; i < GLOBAL_TICKET_INDEX; i++){
     if(strcmp(tiket[i].tanggal_pemesanan, tanggal) == 0){
       printTiket(&tiket[i], flight);
+      hasFound++;
     }
-    else{
-      printf("Tiket dengan tanggal pemesanan %s tidak ditemukan\n", tanggal);
-    }
+  }
+  
+  if(!hasFound){
+    printf("Tiket dengan tanggal pemesanan %s tidak ditemukan\n", tanggal);
   }
 }
 
@@ -869,7 +909,7 @@ void searchTicket(struct Tiket *tiket, struct Flight *flight){
   printf("1. Nama\n");
   printf("2. Kursi\n");
   // printf("3. Tanggal Keberangkatan\n");
-  printf("4. Tanggal Pemesanan\n");
+  printf("3. Tanggal Pemesanan\n");
   
   int choice;
   printf("Pilihan Kamu: ");
@@ -885,7 +925,7 @@ void searchTicket(struct Tiket *tiket, struct Flight *flight){
     // case 3:
     //   searchTicketByDepartureDate(tiket);
     //   break;
-    case 4:
+    case 3:
       searchTicketByPurchaseDate(tiket, flight);
       break;
     default:
@@ -915,24 +955,22 @@ void sortTicketBySeat(struct Tiket *tiket){
   }
 }
 
-// void sortTicketByDepartureDate(struct Tiket *tiket){
-//   int i, j;
-//   for(i = 0; i < GLOBAL_TICKET_INDEX - 1; i++){
-//     int minIndex = i;
-//     for(j = i + 1; j < GLOBAL_TICKET_INDEX; j++){
-//       if(strcmp(tiket[j].tanggal_keberangkatan, tiket[minIndex].tanggal_keberangkatan) < 0){
-//         minIndex = j;
-//       }
-//     }
-//     swap(&tiket[i], &tiket[minIndex]);
-//   }
-// }
-
 void sortTicketByPurchaseDate(struct Tiket *tiket){
   int i, j;
   for(i = 0; i < GLOBAL_TICKET_INDEX - 1; i++){
     for(j = 0; j < GLOBAL_TICKET_INDEX - i - 1; j++){
       if(strcmp(tiket[j].tanggal_pemesanan, tiket[j+1].tanggal_pemesanan) > 0){
+        swap(&tiket[j], &tiket[j+1]);
+      }
+    }
+  }
+}
+
+void sortTicketByName(struct Tiket *tiket){
+  int i, j;
+  for(i = 0; i < GLOBAL_TICKET_INDEX - 1; i++){
+    for(j = 0; j < GLOBAL_TICKET_INDEX - i - 1; j++){
+      if(strcmp(tiket[j].pemilik, tiket[j+1].pemilik) > 0){
         swap(&tiket[j], &tiket[j+1]);
       }
     }
@@ -949,7 +987,8 @@ void sortTicket(struct Tiket *tiket, struct Flight *flight){
   printf("Urutkan Tiket Berdasarkan: \n");
   printf("1. Kursi \n");
   // printf("2. Tanggal Keberangkatan \n");
-  printf("3. Tanggal Pemesanan \n");
+  printf("2. Tanggal Pemesanan \n");
+  printf("3. Nama Penumpang \n");
   
   printf("Pilihan Kamu: ");
   scanf("%d", &choice);
@@ -961,8 +1000,11 @@ void sortTicket(struct Tiket *tiket, struct Flight *flight){
     // case 2:
     //   sortTicketByDepartureDate(tiket);
     //   break;
-    case 3:
+    case 2:
       sortTicketByPurchaseDate(tiket);
+      break;
+    case 3:
+      sortTicketByName(tiket);
       break;
     default:
       printf("Pilihan tidak valid\n");
@@ -975,13 +1017,10 @@ void sortTicket(struct Tiket *tiket, struct Flight *flight){
 bool checkAvailableSeat(struct Kursi *kursi, char *selectedSeat){
   for(int i = 0; i < jumlahKursi; i++){
     if(strcmp(kursi[i].posisi, selectedSeat) == 0){
-      //printf("Kursi sudah terisi\n");
-      return true;
+      return kursi[i].status == BOOKED;
     }
   }
-  
-  //printf("Kursi tersedia\n");
-  return false;
+  return false; // kursi tidak ditemukan
 }
 
 void editTiket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *flight){
@@ -1014,41 +1053,54 @@ void editTiket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *flight){
   printf("Pilih Id Tiket yang ingin diganti: ");
   scanf("%d", &idCari);
   
+  int idx = findTiketIndexById(tiket, idCari);
+  
+  if(idx == -1){
+    printf("Tiket tidak ditemukan\n");
+    return;
+  }
+  
   switch(choice){
     case 1:
       printf("Masukkan nama baru: ");
-      scanf(" %[^\n]]", tiket[idCari - 1].pemilik);
+      scanf(" %[^\n]", tiket[idx].pemilik);
       
       printf("Nama berhasil diubah\n");
       break;
     case 2:
       char selectedSeat[10];
-      char *answer = "y";
-      bool isAvailableSeat = false;
-      printJudul("EDIT KURSI");
-      printKursi(flight[tiket[idCari - 1].flight_id].kursi, jumlahKursi);
+      char answer;
+      bool isDone = false;
+    
+      int flightIdx = tiket[idx].flight_id - 1;
+    
+      printKursi(flight[flightIdx].kursi, jumlahKursi);
+    
       do{
         printf("Masukkan nomor kursi baru: ");
         scanf(" %s", selectedSeat);
-        
-        if(checkAvailableSeat(kursi, selectedSeat)){
+    
+        if(checkAvailableSeat(flight[flightIdx].kursi, selectedSeat)){
           printf("Kursi sudah terisi\n");
-        } else {
-          printf("Apakah anda yakin ingin mengubah posisi kursi? (y/n): ");
-          scanf(" %c", answer);
-          int idxKursiAfter = searchKursi(kursi, jumlahKursi, selectedSeat);
-          int idxKursiBefore = searchKursi(kursi, jumlahKursi, tiket[idCari - 1].kursi);
-          if(strcmp(answer, "y") == 0){
-            flight[tiket[idCari - 1].flight_id].kursi[idxKursiBefore].status = AVAILABLE;
-            flight[tiket[idCari - 1].flight_id].kursi[idxKursiAfter].status = BOOKED;
-            strcpy(tiket[idCari - 1].kursi, selectedSeat);
-            printf("Nomor kursi berhasil diubah\n");
-            isAvailableSeat = true;
-          }
+          continue;
         }
-      }
-      while(!isAvailableSeat && strcmp(answer, "n") == 0);
-      
+    
+        printf("Yakin ingin mengganti kursi? (y/n): ");
+        scanf(" %c", &answer);
+    
+        if(answer == 'y'){
+          int before = searchKursi(flight[flightIdx].kursi, jumlahKursi, tiket[idx].kursi);
+          int after  = searchKursi(flight[flightIdx].kursi, jumlahKursi, selectedSeat);
+    
+          flight[flightIdx].kursi[before].status = AVAILABLE;
+          flight[flightIdx].kursi[after].status  = BOOKED;
+    
+          strcpy(tiket[idx].kursi, selectedSeat);
+          isDone = true;
+          printf("Kursi berhasil diubah\n");
+        }
+    
+      } while(!isDone && answer != 'n');
       break;
     default:
       printf("Pilihan tidak valid\n");
@@ -1076,18 +1128,21 @@ void cancelTicket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *fligh
   printf("Masukkan ID Tiket yang ingin dibatalkan: ");
   scanf("%d", &idCari);
   
-  char *choice = "y";
+  char choice;
   
   if(idCari > 0 && idCari <= GLOBAL_TICKET_INDEX){
     if(strcmp(tiket[idCari - 1].createdBy, username) == 0){
       printf("Apakah anda yakin ingin membatalkan tiket ini? (y/n): ");
-      scanf(" %c", &answer);
+      scanf(" %c", &choice);
       
-      if(strcmp(choice, "y") == 0){
+      if(choice == 'y' || choice == 'Y'){
         int idxKursi = searchKursi(kursi, jumlahKursi, tiket[idCari - 1].kursi);
         flight[tiket[idCari - 1].flight_id].kursi[idxKursi].status = AVAILABLE;
         tiket[idCari - 1].status = CANCELLED;
         printf("Tiket berhasil dibatalkan\n");
+      }
+      else{
+        printf("Tiket tidak dibatalkan\n");
       }
     } else {
       printf("Anda tidak memiliki akses untuk membatalkan tiket ini\n");
@@ -1102,16 +1157,16 @@ void cancelTicket(struct Tiket *tiket, struct Kursi *kursi, struct Flight *fligh
 
 void menu(struct Tiket *tiket, struct User *user, int totalUser, struct Kursi *kursi, int jumlahKursi, struct Flight *flight){
   int choice;
-  printJudul("Selamat datang di tiket pemesanan pesawat");
-  printf("1. Beli Tiket\n");
-  printf("2. Tampilkan Semua Tiket Yang Dipesan Oleh Saya\n");
-  printf("3. Cari Tiket\n");
-  printf("4. Urutkan Tiket\n");
-  printf("5. Edit Tiket (Jika ada kesalahan data!)\n");
-  printf("6. Batalkan Tiket \n");
-  printf("7. Logout\n");
-  
-  printf("Pilihan Kamu: ");
+  printJudul("MENU PEMESANAN TIKET");
+  printf(" 1. Beli Tiket\n");
+  printf(" 2. Tiket Saya\n");
+  printf(" 3. Cari Tiket\n");
+  printf(" 4. Urutkan Tiket\n");
+  printf(" 5. Edit Tiket\n");
+  printf(" 6. Batalkan Tiket\n");
+  printf(" 7. Logout\n");
+  subLine();
+  printf(" Pilihan Anda : ");
   scanf("%d", &choice);
   printJudul("");
   printf("\n");
@@ -1156,10 +1211,13 @@ int main(){
   struct Kursi kursi[jumlahKursi];
   struct Tiket tiket[jumlahKursi];
   
-  loadFlightFromFile();
+  //loadFlightFromFile();
   
   int totalUser = openFile(user);
   getLogFromFile(logHistory);
+  
+  loadingPlaneMove();
+  
   while(1){
     if(!isLogout()){
       if(strcmp(username, ADMIN_USERNAME) == 0){
